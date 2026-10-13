@@ -16,6 +16,7 @@
 
   <header class="toolbar">
     <button @click="open" title="Ctrl+O">Открыть…</button>
+    <button @click="openDefault" title="Заводская библиотека «Рубеж» 2.8.7 (Default.rlib)">Заводская</button>
     <button @click="save" :disabled="!lib" title="Ctrl+S">Сохранить</button>
     <button @click="saveAs" :disabled="!lib" title="Ctrl+Shift+S">Сохранить как…</button>
     <span class="file" v-if="lib">{{ fileName }}<span class="dirty" v-if="dirty" title="Есть несохранённые изменения"> ●</span></span>
@@ -39,6 +40,7 @@
   <div class="welcome" v-if="!lib">
     <h1>Редактор библиотеки значков</h1>
     <p>Откройте файл <code>.rlib</code> кнопкой «Открыть…» или перетащите его в окно.</p>
+    <p><button @click="openDefault">Открыть заводскую библиотеку</button></p>
     <p class="hint" v-if="!canSaveInPlace">В этом браузере сохранение работает через скачивание копии файла.
       Для сохранения в исходный файл используйте Edge или Chrome.</p>
   </div>

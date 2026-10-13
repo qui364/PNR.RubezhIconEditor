@@ -7,9 +7,31 @@
   var canPick = typeof window.showOpenFilePicker === 'function';
 
   async function readFile(file) {
-    var bytes = new Uint8Array(await file.arrayBuffer());
+    return decode(file.name, new Uint8Array(await file.arrayBuffer()));
+  }
+
+  function decode(name, bytes) {
     var bom = bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF;
-    return { name: file.name, text: new TextDecoder('utf-8').decode(bytes), bom: bom };
+    return { name: name, text: new TextDecoder('utf-8').decode(bytes), bom: bom };
+  }
+
+  // Заводская библиотека из data/default-rlib.js. Подгружается тегом <script> по запросу:
+  // так работает и на сайте, и на file://, где fetch локальных файлов запрещён.
+  function openDefault() {
+    return new Promise(function (resolve, reject) {
+      function done() {
+        var bin = atob(RIE.defaultRlib);
+        var bytes = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        resolve(decode('Default.rlib', bytes));
+      }
+      if (RIE.defaultRlib) return done();
+      var s = document.createElement('script');
+      s.src = 'data/default-rlib.js';
+      s.onload = done;
+      s.onerror = function () { s.remove(); reject(new Error('нет файла data/default-rlib.js')); };
+      document.head.appendChild(s);
+    });
   }
 
   function pickViaInput() {
@@ -79,5 +101,5 @@
     return { handle: null, name: name, downloaded: true };
   }
 
-  RIE.fileio = { open: open, readFile: readFile, writeHandle: writeHandle, saveAs: saveAs, canSaveInPlace: canPick };
+  RIE.fileio = { open: open, openDefault: openDefault, readFile: readFile, writeHandle: writeHandle, saveAs: saveAs, canSaveInPlace: canPick };
 })(window.RIE = window.RIE || {});

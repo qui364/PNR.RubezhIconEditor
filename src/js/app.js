@@ -176,7 +176,7 @@
       },
       stateKey: function () {
         this.frameIdx = 0;
-        if (this.state && !this.state.frames.length && this.state.svgImage !== null) this.tab = 'svg';
+        this.tab = 'xaml';
       },
       missingStates: function (v) {
         if (!v.some(function (s) { return s.code === this.newStateClass; }, this)) {
@@ -223,6 +223,15 @@
           if (f) this.load(f);
         } catch (e) {
           this.say('Не удалось открыть файл: ' + e.message, true);
+        }
+      },
+
+      openDefault: async function () {
+        if (!this.confirmDiscard()) return;
+        try {
+          this.load(await RIE.fileio.openDefault());
+        } catch (e) {
+          this.say('Не удалось открыть заводскую библиотеку: ' + e.message, true);
         }
       },
 
