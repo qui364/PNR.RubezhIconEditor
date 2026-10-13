@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Редактор библиотеки значков</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app" v-cloak :class="['bg-' + bg, { 'drag-over': dragOver }]"
+     @dragover.prevent="dragOver = true" @dragleave.self="dragOver = false" @drop.prevent="onDrop">
+
+  <header class="toolbar">
+    <button @click="open" title="Ctrl+O">Открыть…</button>
+    <button @click="save" :disabled="!lib" title="Ctrl+S">Сохранить</button>
+    <button @click="saveAs" :disabled="!lib" title="Ctrl+Shift+S">Сохранить как…</button>
+    <span class="file" v-if="lib">{{ fileName }}<span class="dirty" v-if="dirty" title="Есть несохранённые изменения"> ●</span></span>
+    <span class="spacer"></span>
+    <label class="bg-pick">Фон превью
+      <select v-model="bg">
+        <option value="dark">тёмный</option>
+        <option value="light">светлый</option>
+        <option value="checker">шахматка</option>
+      </select>
+    </label>
+  </header>
+
+  <div class="welcome" v-if="!lib">
+    <h1>Редактор библиотеки значков</h1>
+    <p>Откройте файл <code>.rlib</code> кнопкой «Открыть…» или перетащите его в окно.</p>
+    <p class="hint" v-if="!canSaveInPlace">В этом браузере сохранение работает через скачивание копии файла.
+      Для сохранения в исходный файл используйте Edge или Chrome.</p>
+  </div>
+
+  <main class="layout" v-else>
+    <!-- Устройства -->
+    <section class="panel devices">
+      <div class="panel-head">
+        <input type="search" v-model="search" placeholder="Поиск: имя, UID, DriverUID">
+        <span class="count">{{ devices.length }} / {{ lib.devices.length }}</span>
+      </div>
+      <ul class="list">
+        <li v-for="d in devices" :key="d.key" :class="{ sel: d.key === deviceKey }" @click="deviceKey = d.key">
+          <state-art class="thumb" :device="d" :state="thumbState(d)" :playing="false"></state-art>
+          <div class="li-text">
+            <div class="li-title" :class="{ muted: !d.name }">{{ deviceTitle(d) }}</div>
+            <div class="li-sub mono">{{ short(d.driverUid) }} · {{ d.states.length }} сост.</div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Устройство и состояния -->
+    <section class="panel device" v-if="device">
+      <div class="fields">
+        <label>Имя <input :value="device.name || ''" @input="setName($event.target.value)" placeholder="(не задано)"></label>
+        <label>DriverUID <input class="mono" v-model.trim="device.driverUid" :class="{ invalid: !driverUidValid }"
+          :title="driverUidValid ? '' : 'Не похоже на GUID'"></label>
+        <label>UID <input class="mono" :value="device.uid" readonly></label>
+        <div class="btn-row">
+          <button @click="duplicateDevice">Дублировать</button>
+          <button class="danger" @click="deleteDevice">Удалить</button>
+        </div>
+      </div>
+      <h3>Состояния</h3>
+      <ul class="list states">
+        <li v-for="s in states" :key="s.key" :class="{ sel: s.key === stateKey }" @click="stateKey = s.key">
+          <state-art class="thumb" :device="device" :state="s"></state-art>
+          <div class="li-text">
+            <div class="li-title">{{ label(s.stateClass) }}</div>
+            <div class="li-sub"><span class="mono">{{ s.stateClass }}</span> · кадров {{ s.frames.length }}<span v-if="s.svgImage !== null" class="badge">SVG</span></div>
+          </div>
+        </li>
+      </ul>
+      <div class="add-state" v-if="missingStates.length">
+        <select v-model="newStateClass">
+          <option v-for="s in missingStates" :value="s.code">{{ s.label }} ({{ s.code }})</option>
+        </select>
+        <label class="check"><input type="checkbox" v-model="newStateCopy" :disabled="!state"> копия выбранного</label>
+        <button @click="addState">Добавить состояние</button>
+      </div>
+      <div class="btn-row" v-if="state">
+        <button class="danger" @click="deleteState">Удалить состояние</button>
+      </div>
+    </section>
+
+    <!-- Редактор состояния -->
+    <section class="panel editor" v-if="state">
+      <div class="tabs">
+        <button :class="{ active: tab === 'xaml' }" @click="tab = 'xaml'">Кадры (XAML) · {{ state.frames.length }}</button>
+        <button :class="{ active: tab === 'svg' }" @click="tab = 'svg'">SVG для веба<span v-if="state.svgImage === null" class="muted"> · нет</span></button>
+        <span class="spacer"></span>
+        <span class="state-name">{{ deviceTitle(device) }} — {{ label(state.stateClass) }}</span>
+      </div>
+
+      <template v-if="tab === 'xaml'">
+        <div class="previews">
+          <figure>
+            <div class="stage big">
+              <xaml-view v-if="frame" :src="frame.image"></xaml-view>
+              <div v-else class="art art-empty">нет кадров</div>
+            </div>
+            <figcaption>Кадр {{ frame ? frameIdx + 1 : '—' }}</figcaption>
+          </figure>
+          <figure>
+            <div class="stage medium"><frame-player :frames="state.frames" :playing="playing"></frame-player></div>
+            <figcaption>
+              <button class="link" @click="playing = !playing">{{ playing ? '❚❚ пауза' : '▶ анимация' }}</button>
+            </figcaption>
+            <div class="stage small"><frame-player :frames="state.frames" :playing="playing"></frame-player></div>
+            <figcaption>в масштабе плана</figcaption>
+          </figure>
+        </div>
+
+        <div class="frames">
+          <div v-for="(f, i) in state.frames" :key="f.key" class="frame" :class="{ sel: i === frameIdx }" @click="frameIdx = i">
+            <xaml-view class="thumb" :src="f.image"></xaml-view>
+            <div class="frame-meta">
+              <span class="muted" title="Id кадра в файле">#{{ f.id }}</span>
+              <input type="number" min="1" step="50" :value="f.duration" @change="setDuration(f, $event.target.value)" title="Длительность, мс"> мс
+            </div>
+            <div class="frame-btns">
+              <button title="Влево" @click.stop="moveFrame(i, -1)" :disabled="i === 0">←</button>
+              <button title="Вправо" @click.stop="moveFrame(i, 1)" :disabled="i === state.frames.length - 1">→</button>
+              <button title="Дублировать" @click.stop="duplicateFrame(i)">⧉</button>
+              <button title="Удалить" class="danger" @click.stop="deleteFrame(i)">✕</button>
+            </div>
+          </div>
+          <button class="frame add" @click="addFrame">+ кадр</button>
+        </div>
+
+        <div class="code" v-if="frame">
+          <textarea v-model="frame.image" spellcheck="false" wrap="off"></textarea>
+          <div class="diag error" v-if="frameRes.error">{{ frameRes.error }}</div>
+          <div class="diag warn" v-for="w in frameRes.warnings">{{ w }}</div>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="empty-svg" v-if="state.svgImage === null">
+          <p>У состояния нет рисунка для веб-клиента.</p>
+          <button @click="addSvg">Добавить {{ state.stateClass === 'No' ? 'SVG' : 'CSS-стиль' }}</button>
+        </div>
+        <template v-else>
+          <div class="previews">
+            <figure>
+              <div class="stage big">
+                <svg-preview v-if="web.svg" :svg="web.svg"></svg-preview>
+                <div v-else class="art art-empty">{{ web.error }}</div>
+              </div>
+              <figcaption v-if="web.overlay">CSS-стиль поверх SVG базового рисунка</figcaption>
+              <figcaption v-else>SVG</figcaption>
+            </figure>
+          </div>
+          <div class="code">
+            <textarea v-model="state.svgImage" spellcheck="false" wrap="off"></textarea>
+          </div>
+          <div class="btn-row"><button class="danger" @click="deleteSvg">Удалить SVG</button></div>
+        </template>
+      </template>
+    </section>
+  </main>
+
+  <footer class="status" :class="{ err: statusErr }">{{ status }}</footer>
+</div>
+
+<script src="vendor/vue.global.prod.js"></script>
+<script src="js/xml.js"></script>
+<script src="js/rlib.js"></script>
+<script src="js/xaml.js"></script>
+<script src="js/svgweb.js"></script>
+<script src="js/states.js"></script>
+<script src="js/fileio.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

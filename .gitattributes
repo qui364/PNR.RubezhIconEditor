@@ -1,0 +1,5 @@
+# Файлы библиотек хранить байт-в-байт (на них проверяется round-trip)
+*.rlib -text
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+src/vendor/** -text
