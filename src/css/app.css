@@ -130,6 +130,7 @@ input[readonly] { background: var(--bg); }
 .tb-menu { display: contents; }
 .tb-menu .spacer, .tb-menu .theme-btn, .tb-menu .reset, .tb-menu .version { order: 2; }
 .version { color: var(--muted); font-size: 12px; }
+.logo { width: 20px; height: 20px; flex: none; margin-right: 4px; }
 .burger, .tb-backdrop { display: none; }
 .burger { padding: 6px 8px; line-height: 0; }
 .burger svg { display: block; }

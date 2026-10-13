@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PNR.RubezhIconEditor</title>
+<link rel="icon" href="favicon.ico">
 <link rel="stylesheet" href="css/app.css">
 <script>
   // Тема до загрузки Vue — без вспышки светлого фона
@@ -17,6 +18,7 @@
      @dragover.prevent="dragOver = true" @dragleave.self="dragOver = false" @drop.prevent="onDrop">
 
   <header class="toolbar">
+    <img class="logo" src="favicon.ico" alt="" title="PNR.RubezhIconEditor">
     <!-- Бургер — только на узком экране; на широком .tb-menu раскрыт в строку (display: contents) -->
     <button class="burger" @click="menuOpen = !menuOpen" title="Меню" :aria-expanded="menuOpen">
       <svg viewBox="0 0 16 16" width="16" height="16"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
