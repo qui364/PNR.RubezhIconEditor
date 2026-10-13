@@ -17,8 +17,10 @@
   --dirty: #d97706;
   --badge: #047857;
   --badge-soft: #ecfdf5;
-  --stage-dark: #3c3f44;
-  --stage-light: #ffffff;
+  --checker-a: #d0d3d8;   /* шахматка под превью */
+  --checker-b: #ffffff;
+  --checker-text: #6b7280;
+  --backdrop: rgba(0, 0, 0, .35);  /* затемнение под модальным окном */
   --mono: Consolas, 'Cascadia Mono', 'Courier New', monospace;
 }
 
@@ -42,7 +44,10 @@
   --dirty: #f0a030;
   --badge: #5fd0a0;
   --badge-soft: #1d3a30;
-  --stage-dark: #2b2e33;
+  --checker-a: #8e939b;
+  --checker-b: #a4a9b0;
+  --checker-text: #24272b;
+  --backdrop: rgba(0, 0, 0, .6);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme="auto"] {
@@ -64,7 +69,10 @@
     --dirty: #f0a030;
     --badge: #5fd0a0;
     --badge-soft: #1d3a30;
-    --stage-dark: #2b2e33;
+    --checker-a: #8e939b;
+    --checker-b: #a4a9b0;
+    --checker-text: #24272b;
+    --backdrop: rgba(0, 0, 0, .6);
   }
 }
 
@@ -78,8 +86,8 @@ body {
   background: var(--bg);
 }
 
-#app { height: 100%; display: flex; flex-direction: column; }
-#app.drag-over { outline: 3px dashed var(--accent); outline-offset: -6px; }
+#app, .app-root { height: 100%; display: flex; flex-direction: column; }
+.app-root.drag-over { outline: 3px dashed var(--accent); outline-offset: -6px; }
 
 button, input, select, textarea { font: inherit; color: inherit; }
 button {
@@ -188,7 +196,7 @@ img.art { object-fit: contain; }
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--muted);
+  color: var(--checker-text);
   font-size: 12px;
   text-align: center;
   padding: 4px;
@@ -198,11 +206,8 @@ img.art { object-fit: contain; }
 .thumb, .stage {
   flex: none;
   border-radius: 4px;
-  background: var(--stage-dark);
-}
-.bg-light .thumb, .bg-light .stage { background: var(--stage-light); box-shadow: inset 0 0 0 1px var(--line); }
-.bg-checker .thumb, .bg-checker .stage {
-  background: #fff repeating-conic-gradient(#d0d3d8 0 25%, #fff 0 50%) 0 0 / 16px 16px;
+  background: var(--checker-b) repeating-conic-gradient(var(--checker-a) 0 25%, var(--checker-b) 0 50%) 0 0 / 16px 16px;
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 .thumb { width: 40px; height: 40px; padding: 3px; }
 .stage.big { width: 320px; height: 320px; padding: 10px; }
@@ -213,6 +218,7 @@ img.art { object-fit: contain; }
 .fields { padding: 10px; display: grid; gap: 6px; border-bottom: 1px solid var(--line); }
 .fields label { display: grid; grid-template-columns: 70px 1fr; gap: 6px; align-items: center; color: var(--muted); }
 .fields label input { color: var(--text); }
+.fields label input.muted { color: var(--muted); }
 .btn-row { display: flex; gap: 6px; padding: 8px 10px; }
 .fields .btn-row { padding: 4px 0 0; }
 .add-state { display: grid; gap: 6px; padding: 10px; border-top: 1px solid var(--line); }
@@ -283,3 +289,21 @@ figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 .diag.error { background: var(--danger-soft); color: var(--danger); }
 .diag.warn { background: var(--warn-soft); color: var(--warn); }
 .empty-svg { padding: 24px 10px; color: var(--muted); }
+
+/* Модальное окно подтверждения */
+.modal {
+  width: min(440px, calc(100vw - 32px));
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 8px 32px var(--backdrop);
+}
+.modal::backdrop { background: var(--backdrop); }
+.modal h2 { margin: 0 0 8px; font-size: 16px; }
+.modal p { margin: 0 0 16px; line-height: 1.45; white-space: pre-line; }
+.modal-btns { display: flex; justify-content: flex-end; gap: 8px; }
+.modal-btns button { min-width: 90px; padding: 5px 12px; }
+.modal-btns button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal-btns button.danger { background: var(--danger-soft); border-color: var(--danger); }

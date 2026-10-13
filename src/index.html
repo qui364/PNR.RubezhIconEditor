@@ -11,7 +11,9 @@
 </script>
 </head>
 <body>
-<div id="app" v-cloak :class="['bg-' + bg, { 'drag-over': dragOver }]"
+<div id="app" v-cloak>
+<!-- Привязки — на внутреннем элементе: атрибуты самого контейнера mount() Vue не обрабатывает -->
+<div class="app-root" :class="{ 'drag-over': dragOver }"
      @dragover.prevent="dragOver = true" @dragleave.self="dragOver = false" @drop.prevent="onDrop">
 
   <header class="toolbar">
@@ -28,13 +30,6 @@
         <option value="dark">тёмная</option>
       </select>
     </label>
-    <label class="bg-pick">Фон превью
-      <select v-model="bg">
-        <option value="dark">тёмный</option>
-        <option value="light">светлый</option>
-        <option value="checker">шахматка</option>
-      </select>
-    </label>
   </header>
 
   <div class="welcome" v-if="!lib">
@@ -49,15 +44,15 @@
     <!-- Устройства -->
     <section class="panel devices">
       <div class="panel-head">
-        <input type="search" v-model="search" placeholder="Поиск: имя, UID, DriverUID">
+        <input type="search" v-model="search" placeholder="Поиск: название, обозначение, UID">
         <span class="count">{{ devices.length }} / {{ lib.devices.length }}</span>
       </div>
       <ul class="list">
         <li v-for="d in devices" :key="d.key" :class="{ sel: d.key === deviceKey }" @click="deviceKey = d.key">
           <state-art class="thumb" :device="d" :state="thumbState(d)" :playing="false"></state-art>
           <div class="li-text">
-            <div class="li-title" :class="{ muted: !d.name }">{{ deviceTitle(d) }}</div>
-            <div class="li-sub mono">{{ short(d.driverUid) }} · {{ d.states.length }} сост.</div>
+            <div class="li-title" :class="{ muted: !d.name && !driver(d) }" :title="deviceTitle(d)">{{ deviceTitle(d) }}</div>
+            <div class="li-sub"><template v-if="deviceSub(d)"><span :class="{ mono: !driver(d) }">{{ deviceSub(d) }}</span> · </template>{{ d.states.length }} сост.</div>
           </div>
         </li>
       </ul>
@@ -66,6 +61,7 @@
     <!-- Устройство и состояния -->
     <section class="panel device" v-if="device">
       <div class="fields">
+        <label>Тип <input :value="driverText" :title="driverText" :class="{ muted: !driver(device) }" readonly></label>
         <label>Имя <input :value="device.name || ''" @input="setName($event.target.value)" placeholder="(не задано)"></label>
         <label>DriverUID <input class="mono" v-model.trim="device.driverUid" :class="{ invalid: !driverUidValid }"
           :title="driverUidValid ? '' : 'Не похоже на GUID'"></label>
@@ -175,6 +171,19 @@
   </main>
 
   <footer class="status" :class="{ err: statusErr }">{{ status }}</footer>
+
+  <!-- Модальное окно подтверждения (см. ask() в app.js) -->
+  <dialog ref="dlg" class="modal" @cancel.prevent="answer(false)">
+    <template v-if="dlg">
+      <h2>{{ dlg.title }}</h2>
+      <p>{{ dlg.text }}</p>
+      <div class="modal-btns">
+        <button ref="dlgOk" :class="{ danger: dlg.danger, primary: !dlg.danger }" @click="answer(true)">{{ dlg.ok }}</button>
+        <button @click="answer(false)">{{ dlg.cancel }}</button>
+      </div>
+    </template>
+  </dialog>
+</div>
 </div>
 
 <script src="vendor/vue.global.prod.js"></script>
@@ -183,6 +192,7 @@
 <script src="js/xaml.js"></script>
 <script src="js/svgweb.js"></script>
 <script src="js/states.js"></script>
+<script src="data/drivers.js"></script>
 <script src="js/fileio.js"></script>
 <script src="js/app.js"></script>
 </body>

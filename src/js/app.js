@@ -95,7 +95,6 @@
         stateKey: null,
         frameIdx: 0,
         tab: 'xaml',
-        bg: loadPref('bg', 'dark'),
         theme: loadPref('theme', 'auto'),
         playing: true,
         newStateClass: '',
@@ -103,6 +102,7 @@
         status: '',
         statusErr: false,
         dragOver: false,
+        dlg: null,   // открытое модальное окно: { title, text, ok, cancel, danger, resolve }
         canSaveInPlace: RIE.fileio.canSaveInPlace
       };
     },
@@ -112,8 +112,10 @@
         if (!this.lib) return [];
         var q = this.search.trim().toLowerCase();
         if (!q) return this.lib.devices;
+        var self = this;
         return this.lib.devices.filter(function (d) {
-          return (d.name || '').toLowerCase().indexOf(q) >= 0 ||
+          var drv = self.driver(d) || [];
+          return [d.name, drv[0], drv[1]].join('\n').toLowerCase().indexOf(q) >= 0 ||
             d.uid.toLowerCase().indexOf(q) >= 0 || d.driverUid.toLowerCase().indexOf(q) >= 0;
         });
       },
@@ -145,6 +147,10 @@
       web: function () {
         return this.state && this.state.svgImage !== null ? RIE.svgweb.compose(this.device, this.state) : null;
       },
+      driverText: function () {
+        var drv = this.device && this.driver(this.device);
+        return drv ? drv.filter(Boolean).join(' — ') : 'нет в справочнике драйверов';
+      },
       driverUidValid: function () {
         return !this.device || GUID_RE.test(this.device.driverUid);
       },
@@ -162,7 +168,6 @@
         immediate: true,
         handler: function (t) { document.title = t; }
       },
-      bg: function (v) { savePref('bg', v); },
       theme: {
         immediate: true,
         handler: function (v) {
@@ -188,7 +193,7 @@
     mounted: function () {
       var self = this;
       window.addEventListener('keydown', function (e) {
-        if (!(e.ctrlKey || e.metaKey)) return;
+        if (!(e.ctrlKey || e.metaKey) || self.dlg) return;
         var k = e.key.toLowerCase();
         if (k === 's' || k === 'ы') { e.preventDefault(); e.shiftKey ? self.saveAs() : self.save(); }
         else if (k === 'o' || k === 'щ') { e.preventDefault(); self.open(); }
@@ -200,9 +205,26 @@
 
     methods: {
       label: function (code) { return RIE.states.label(code); },
-      deviceTitle: function (d) { return d.name || 'Без имени'; },
+      // Драйвер по справочнику data/drivers.js: [обозначение, наименование] или null
+      driver: function (d) { return RIE.drivers && RIE.drivers[d.driverUid.toLowerCase()] || null; },
+      // Как в администраторе: Name варианта, иначе наименование драйвера
+      deviceTitle: function (d) {
+        var drv = this.driver(d);
+        return d.name || drv && (drv[1] || drv[0]) || 'Неизвестный драйвер';
+      },
+      deviceSub: function (d) {
+        var drv = this.driver(d);
+        return drv ? drv[0] : this.short(d.driverUid);
+      },
+      // Миниатюра — XAML-рисунок (как в десктоп-клиенте): «Базовый рисунок», затем «Норма»,
+      // затем любое состояние с кадрами. В заводской библиотеке у «No» обычно только SvgImage
+      // с незалитым gk-background — без CSS состояния он чёрный, поэтому SVG — в последнюю очередь.
       thumbState: function (d) {
-        return d.states.find(function (x) { return x.stateClass === 'No'; }) || d.states[0] || null;
+        function find(f) { return d.states.find(f); }
+        return find(function (x) { return x.stateClass === 'No' && x.frames.length; }) ||
+          find(function (x) { return x.stateClass === 'Norm' && x.frames.length; }) ||
+          find(function (x) { return x.frames.length; }) ||
+          find(function (x) { return x.stateClass === 'No'; }) || d.states[0] || null;
       },
       short: function (guid) { return guid ? guid.slice(0, 8) : '—'; },
 
@@ -211,13 +233,47 @@
         this.statusErr = !!err;
       },
 
+      // Модальное подтверждение вместо confirm(): возвращает Promise<boolean>.
+      // Esc и «Отмена» — false, Enter (фокус на кнопке действия) — true.
+      ask: function (o) {
+        var self = this;
+        if (this.dlg) this.answer(false);
+        return new Promise(function (resolve) {
+          self.dlg = {
+            title: o.title || 'Подтверждение',
+            text: o.text || '',
+            ok: o.ok || 'OK',
+            cancel: o.cancel || 'Отмена',
+            danger: !!o.danger,
+            resolve: resolve
+          };
+          self.$nextTick(function () {
+            if (!self.$refs.dlg.open) self.$refs.dlg.showModal();
+            self.$refs.dlgOk.focus();
+          });
+        });
+      },
+
+      answer: function (v) {
+        var d = this.dlg;
+        if (!d) return;
+        this.dlg = null;
+        if (this.$refs.dlg.open) this.$refs.dlg.close();
+        d.resolve(v);
+      },
+
       confirmDiscard: function () {
-        return !this.dirty || confirm('Есть несохранённые изменения. Продолжить без сохранения?');
+        if (!this.dirty) return Promise.resolve(true);
+        return this.ask({
+          title: 'Несохранённые изменения',
+          text: 'В «' + this.fileName + '» есть несохранённые изменения. Продолжить без сохранения?',
+          ok: 'Не сохранять', danger: true
+        });
       },
 
       // ----- Файлы -----
       open: async function () {
-        if (!this.confirmDiscard()) return;
+        if (!await this.confirmDiscard()) return;
         try {
           var f = await RIE.fileio.open();
           if (f) this.load(f);
@@ -227,7 +283,12 @@
       },
 
       openDefault: async function () {
-        if (!this.confirmDiscard()) return;
+        var ok = this.dirty ? await this.confirmDiscard() : !this.lib || await this.ask({
+          title: 'Заводская библиотека',
+          text: 'Закрыть «' + this.fileName + '» и открыть заводскую библиотеку «Рубеж» 2.8.7?',
+          ok: 'Открыть'
+        });
+        if (!ok) return;
         try {
           this.load(await RIE.fileio.openDefault());
         } catch (e) {
@@ -239,9 +300,12 @@
         this.dragOver = false;
         var item = ev.dataTransfer.items && ev.dataTransfer.items[0];
         var file = ev.dataTransfer.files[0];
-        if (!file || !this.confirmDiscard()) return;
+        if (!file) return;
+        // Хэндл запрашиваем сразу: после await (модального окна) dataTransfer уже недоступен
+        var handleP = item && item.getAsFileSystemHandle ? item.getAsFileSystemHandle().catch(function () { return null; }) : null;
+        if (!await this.confirmDiscard()) return;
         try {
-          var handle = item && item.getAsFileSystemHandle ? await item.getAsFileSystemHandle() : null;
+          var handle = handleP ? await handleP : null;
           var f = await RIE.fileio.readFile(file);
           f.handle = handle && handle.kind === 'file' ? handle : null;
           this.load(f);
@@ -309,9 +373,13 @@
         this.say('Создана копия устройства с новым UID');
       },
 
-      deleteDevice: function () {
+      deleteDevice: async function () {
         var d = this.device;
-        if (!confirm('Удалить устройство «' + this.deviceTitle(d) + '» (' + d.uid + ') со всеми состояниями?')) return;
+        if (!await this.ask({
+          title: 'Удаление устройства',
+          text: 'Удалить устройство «' + this.deviceTitle(d) + '» (' + d.uid + ') со всеми состояниями?',
+          ok: 'Удалить', danger: true
+        })) return;
         var list = this.lib.devices;
         var i = list.indexOf(d);
         list.splice(i, 1);
@@ -333,9 +401,13 @@
         this.stateKey = s.key;
       },
 
-      deleteState: function () {
+      deleteState: async function () {
         var s = this.state;
-        if (!confirm('Удалить состояние «' + this.label(s.stateClass) + '»?')) return;
+        if (!await this.ask({
+          title: 'Удаление состояния',
+          text: 'Удалить состояние «' + this.label(s.stateClass) + '» со всеми кадрами?',
+          ok: 'Удалить', danger: true
+        })) return;
         var list = this.device.states;
         list.splice(list.indexOf(s), 1);
         this.stateKey = this.states.length ? this.states[0].key : null;
@@ -359,8 +431,8 @@
         this.frameIdx = i + 1;
       },
 
-      deleteFrame: function (i) {
-        if (!confirm('Удалить кадр ' + (i + 1) + '?')) return;
+      deleteFrame: async function (i) {
+        if (!await this.ask({ title: 'Удаление кадра', text: 'Удалить кадр ' + (i + 1) + '?', ok: 'Удалить', danger: true })) return;
         this.state.frames.splice(i, 1);
         this.frameIdx = Math.max(0, Math.min(this.frameIdx, this.state.frames.length - 1));
       },
@@ -384,8 +456,13 @@
         this.state.svgImage = this.state.stateClass === 'No' ? SVG_TEMPLATE : CSS_TEMPLATE;
       },
 
-      deleteSvg: function () {
-        if (confirm('Удалить SVG (рисунок для веб-клиента) у этого состояния?')) this.state.svgImage = null;
+      deleteSvg: async function () {
+        var s = this.state;
+        if (await this.ask({
+          title: 'Удаление SVG',
+          text: 'Удалить SVG (рисунок для веб-клиента) у этого состояния?',
+          ok: 'Удалить', danger: true
+        })) s.svgImage = null;
       }
     }
   });
