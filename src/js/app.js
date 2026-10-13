@@ -96,6 +96,7 @@
         frameIdx: 0,
         tab: 'xaml',
         bg: loadPref('bg', 'dark'),
+        theme: loadPref('theme', 'auto'),
         playing: true,
         newStateClass: '',
         newStateCopy: false,
@@ -162,6 +163,13 @@
         handler: function (t) { document.title = t; }
       },
       bg: function (v) { savePref('bg', v); },
+      theme: {
+        immediate: true,
+        handler: function (v) {
+          document.documentElement.setAttribute('data-theme', v);
+          savePref('theme', v);
+        }
+      },
       deviceKey: function () {
         var s = this.states.find(function (x) { return x.stateClass === 'No'; }) || this.states[0];
         this.stateKey = s ? s.key : null;

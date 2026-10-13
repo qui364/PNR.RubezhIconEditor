@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Редактор библиотеки значков</title>
 <link rel="stylesheet" href="css/app.css">
+<script>
+  // Тема до загрузки Vue — без вспышки светлого фона
+  try { document.documentElement.setAttribute('data-theme', localStorage.getItem('rie.theme') || 'auto'); } catch (e) {}
+</script>
 </head>
 <body>
 <div id="app" v-cloak :class="['bg-' + bg, { 'drag-over': dragOver }]"
@@ -16,6 +20,13 @@
     <button @click="saveAs" :disabled="!lib" title="Ctrl+Shift+S">Сохранить как…</button>
     <span class="file" v-if="lib">{{ fileName }}<span class="dirty" v-if="dirty" title="Есть несохранённые изменения"> ●</span></span>
     <span class="spacer"></span>
+    <label class="bg-pick">Тема
+      <select v-model="theme">
+        <option value="auto">как в системе</option>
+        <option value="light">светлая</option>
+        <option value="dark">тёмная</option>
+      </select>
+    </label>
     <label class="bg-pick">Фон превью
       <select v-model="bg">
         <option value="dark">тёмный</option>
