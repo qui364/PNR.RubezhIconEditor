@@ -177,7 +177,11 @@
     watch: {
       lib: {
         deep: true,
-        handler: function (nv, ov) { if (nv === ov) this.dirty = true; }
+        handler: function (nv, ov) {
+          if (nv !== ov) return;
+          this.dirty = true;
+          this.queueDraft();
+        }
       },
       title: {
         immediate: true,
@@ -215,8 +219,11 @@
         else if (k === 'o' || k === 'щ') { e.preventDefault(); self.open(); }
       });
       window.addEventListener('beforeunload', function (e) {
+        self.flushDraft();
         if (self.dirty) { e.preventDefault(); e.returnValue = ''; }
       });
+      window.addEventListener('pagehide', function () { self.flushDraft(); });
+      this.restoreDraft();
     },
 
     methods: {
@@ -370,7 +377,8 @@
         }
       },
 
-      load: function (f) {
+      // fromDraft — восстановление из черновика; f.dirty — были ли в нём несохранённые правки
+      load: function (f, fromDraft) {
         var lib;
         try {
           lib = R.parse(f.text);
@@ -386,16 +394,56 @@
         this.deviceKey = lib.devices.length ? lib.devices[0].key : null;
         this.view = 'devices';
         var self = this;
-        this.$nextTick(function () { self.dirty = false; });
-        this.say('Открыт «' + f.name + '»: устройств ' + lib.devices.length);
+        this.$nextTick(function () { self.dirty = !!(fromDraft && f.dirty); });
+        if (!fromDraft) this.writeDraft(f.text, false);
+        this.say((!fromDraft ? 'Открыт «' + f.name + '»'
+          : f.dirty ? 'Восстановлен «' + f.name + '» с несохранёнными изменениями'
+          : 'Открыт «' + f.name + '» из прошлого сеанса') + ': устройств ' + lib.devices.length);
+        return true;
+      },
+
+      // ----- Черновик (IndexedDB, js/draft.js): переживает перезагрузку и сбой -----
+      restoreDraft: async function () {
+        var rec;
+        try { rec = await RIE.draft.load(); } catch (e) { return; }
+        if (!rec || this.lib) return;   // пока читали, пользователь уже открыл файл
+        if (!this.load(rec, true)) RIE.draft.clear().catch(function () {});
+      },
+
+      queueDraft: function () {
+        var self = this;
+        clearTimeout(this._draftTimer);
+        this._draftTimer = setTimeout(function () { self.flushDraft(); }, 1000);
+      },
+
+      flushDraft: function () {
+        if (!this._draftTimer) return;
+        clearTimeout(this._draftTimer);
+        this._draftTimer = null;
+        if (this.lib) this.writeDraft();
+      },
+
+      // text — готовый текст файла (иначе сериализуется текущая библиотека)
+      writeDraft: function (text, dirty) {
+        var self = this;
+        clearTimeout(this._draftTimer);
+        this._draftTimer = null;
+        try {
+          RIE.draft.save({
+            name: this.fileName, text: text != null ? text : R.serialize(this.lib),
+            bom: this.bom, handle: Vue.toRaw(this.handle), dirty: dirty != null ? dirty : this.dirty
+          }).catch(function (e) { self.say('Не удалось сохранить черновик: ' + e.message, true); });
+        } catch (e) { /* ошибку сериализации покажет «Сохранить» */ }
       },
 
       save: async function () {
         if (!this.lib) return;
         if (!this.handle) return this.saveAs();
         try {
-          await RIE.fileio.writeHandle(this.handle, R.serialize(this.lib), this.bom);
+          var text = R.serialize(this.lib);
+          await RIE.fileio.writeHandle(this.handle, text, this.bom);
           this.dirty = false;
+          this.writeDraft(text, false);
           this.say('Сохранено: ' + this.fileName);
         } catch (e) {
           this.say('Не удалось сохранить: ' + e.message, true);
@@ -405,11 +453,13 @@
       saveAs: async function () {
         if (!this.lib) return;
         try {
-          var res = await RIE.fileio.saveAs(this.fileName || 'Библиотека значков.rlib', R.serialize(this.lib), this.bom);
+          var text = R.serialize(this.lib);
+          var res = await RIE.fileio.saveAs(this.fileName || 'Библиотека значков.rlib', text, this.bom);
           if (!res) return;
           this.handle = res.handle;
           this.fileName = res.name;
           this.dirty = false;
+          this.writeDraft(text, false);
           this.say(res.downloaded ? 'Файл скачан: ' + res.name + ' (браузер не поддерживает сохранение в исходный файл)' : 'Сохранено: ' + res.name);
         } catch (e) {
           this.say('Не удалось сохранить: ' + e.message, true);
