@@ -2,6 +2,8 @@
 (function (RIE) {
   'use strict';
 
+  RIE.version = '0.0.1';
+
   var R = RIE.rlib;
 
   var SVG_TEMPLATE = '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 500 500">\n' +
@@ -85,6 +87,7 @@
 
     data: function () {
       return {
+        version: RIE.version,
         lib: null,
         fileName: '',
         handle: null,

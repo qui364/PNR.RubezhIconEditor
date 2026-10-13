@@ -34,6 +34,7 @@
           <option value="dark">тёмная</option>
         </select>
       </label>
+      <span class="version" title="Версия редактора">v{{ version }}</span>
     </div>
     <span class="file" v-if="lib">{{ fileName }}<span class="dirty" v-if="dirty" title="Есть несохранённые изменения"> ●</span></span>
   </header>

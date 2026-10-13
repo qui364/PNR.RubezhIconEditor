@@ -128,7 +128,8 @@ input[readonly] { background: var(--bg); }
 }
 /* На широком экране пункты меню — прямо в строке; имя файла — после кнопок, тема — справа */
 .tb-menu { display: contents; }
-.tb-menu .spacer, .tb-menu .bg-pick { order: 2; }
+.tb-menu .spacer, .tb-menu .bg-pick, .tb-menu .version { order: 2; }
+.version { color: var(--muted); font-size: 12px; }
 .burger, .tb-backdrop { display: none; }
 .burger { padding: 6px 8px; line-height: 0; }
 .burger svg { display: block; }
@@ -361,6 +362,7 @@ figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
   .tb-menu.open button { text-align: left; padding: 8px 12px; }
   .tb-menu.open .spacer { flex: none; height: 1px; margin: 2px 0; background: var(--line); }
   .tb-menu.open .bg-pick { justify-content: space-between; }
+  .tb-menu.open .version { padding: 0 12px; }
   .tb-backdrop { display: block; position: fixed; inset: 0; z-index: 19; }
   .welcome { padding: 16px; text-align: center; }
 
