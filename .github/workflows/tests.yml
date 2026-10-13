@@ -1,0 +1,24 @@
+# Тесты (tests/index.html) в headless Chrome на examples/Default.rlib
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Тесты
+        run: |
+          google-chrome --headless=new --disable-gpu --no-sandbox --no-first-run \
+            --allow-file-access-from-files --virtual-time-budget=600000 \
+            --dump-dom "file://$GITHUB_WORKSPACE/tests/index.html?file=Default.rlib" > dom.html 2> chrome.log
+          sed -n '/<pre id="report"/,/<\/pre>/p' dom.html | sed -e 's/<[^>]*>//g' -e 's/&lt;/</g; s/&gt;/>/g; s/&quot;/"/g; s/&amp;/\&/g'
+          grep -q 'RESULT: PASS' dom.html

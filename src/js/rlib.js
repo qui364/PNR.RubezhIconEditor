@@ -67,8 +67,8 @@
     var f = { key: newKey(), id: 0, duration: 500, image: '', extra: [], _o: markRaw({ el: e }) };
     e.children.forEach(function (c) {
       switch (c.name) {
-        case 'Id': readText(f, 'idText', c); f.id = parseInt(f.idText, 10) || 0; break;
-        case 'Duration': readText(f, 'durationText', c); f.duration = parseInt(f.durationText, 10) || 0; break;
+        case 'Id': f.id = readNum(f, 'id', c); break;
+        case 'Duration': f.duration = readNum(f, 'duration', c); break;
         case 'Image': readText(f, 'image', c); break;
         default: f.extra.push(c);
       }
@@ -77,10 +77,23 @@
     return f;
   }
 
+  // Числовое поле: в модели — целое, исходный текст («1,1», «0500») — только в _o
+  // и пишется как есть, пока число не меняли
+  function readNum(obj, field, e) {
+    var v = X.decode(e.text || '');
+    obj._o[field] = [v, e];
+    return parseInt(v, 10) || 0;
+  }
+
+  function numText(obj, field) {
+    var orig = obj._o && obj._o[field];
+    return orig && (parseInt(orig[0], 10) || 0) === obj[field] ? orig[0] : String(obj[field]);
+  }
+
   function writeFrame(f) {
     return X.keepWs(X.el('GKLibraryFrame', [
-      writeText(f, 'idText', 'Id', String(f.id)),
-      writeText(f, 'durationText', 'Duration', String(f.duration)),
+      writeText(f, 'id', 'Id', numText(f, 'id')),
+      writeText(f, 'duration', 'Duration', numText(f, 'duration')),
       writeText(f, 'image', 'Image', f.image)
     ].concat(f.extra || [])), f._o.el);
   }

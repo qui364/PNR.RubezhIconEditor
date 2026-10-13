@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Тесты | PNR.RubezhIconEditor</title>
+<style>
+  body { font: 14px 'Segoe UI', Arial, sans-serif; margin: 16px; background: #fff; color: #222; }
+  pre { font: 12px Consolas, monospace; white-space: pre-wrap; }
+  .pass { color: #176f2c; }
+  .fail { color: #b3261e; }
+</style>
+</head>
+<body>
+<h1>Тесты PNR.RubezhIconEditor</h1>
+<p>
+  Заводская библиотека проверяется всегда. Другие примеры: выбрать файлы
+  <input type="file" id="pick" accept=".rlib" multiple>
+  или открыть страницу с параметрами <code>?file=имя.rlib&amp;file=…</code> (файлы из <code>examples/</code>;
+  на <code>file://</code> нужен браузер с <code>--allow-file-access-from-files</code>, см. <code>run.ps1</code>).
+</p>
+<pre id="report">Выполняется…</pre>
+
+<script src="../src/js/xml.js"></script>
+<script src="../src/js/rlib.js"></script>
+<script src="../src/js/xaml.js"></script>
+<script src="../src/data/default-rlib.js"></script>
+<script src="harness.js"></script>
+<script src="test-xml.js"></script>
+<script src="test-rlib.js"></script>
+<script src="test-xaml.js"></script>
+<script>
+  // Headless-браузер ждёт отчёт благодаря --virtual-time-budget (см. run.ps1, tests.yml)
+  T.loadExamples(new URLSearchParams(location.search).getAll('file')).then(T.runAll);
+
+  document.getElementById('pick').onchange = async function () {
+    var files = Array.from(this.files);
+    var list = [];
+    for (var i = 0; i < files.length; i++) {
+      list.push({ name: files[i].name, bytes: new Uint8Array(await files[i].arrayBuffer()) });
+    }
+    T.runAll({ files: list, errors: [] });
+  };
+</script>
+</body>
+</html>
