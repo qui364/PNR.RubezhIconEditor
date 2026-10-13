@@ -173,7 +173,9 @@
         };
       },
       title: function () {
-        return (this.dirty ? '● ' : '') + (this.fileName || 'Редактор библиотеки значков');
+        var app = 'PNR.RubezhIconEditor';
+        if (!this.fileName) return app;
+        return (this.dirty ? '● ' : '') + this.fileName + ' | ' + app;
       }
     },
 
