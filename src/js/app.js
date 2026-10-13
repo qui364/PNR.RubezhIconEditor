@@ -96,6 +96,9 @@
         frameIdx: 0,
         tab: 'xaml',
         theme: loadPref('theme', 'auto'),
+        sizes: loadSizes(),   // ширины колонок и размер превью (разделители)
+        view: 'devices',      // видимая панель на узком экране: devices | device | editor
+        menuOpen: false,      // бургер-меню панели инструментов (узкий экран)
         playing: true,
         newStateClass: '',
         newStateCopy: false,
@@ -154,6 +157,18 @@
       driverUidValid: function () {
         return !this.device || GUID_RE.test(this.device.driverUid);
       },
+      // Панель для узкого экрана; если выбранной нет (удалили) — ближайшая существующая
+      shownView: function () {
+        if (this.view === 'editor' && !this.state || this.view === 'device') return this.device ? 'device' : 'devices';
+        return this.view;
+      },
+      layoutStyle: function () {
+        return {
+          '--w-devices': this.sizes.devices + 'px',
+          '--w-device': this.sizes.device + 'px',
+          '--stage': this.sizes.stage + 'px'
+        };
+      },
       title: function () {
         return (this.dirty ? '● ' : '') + (this.fileName || 'Редактор библиотеки значков');
       }
@@ -193,6 +208,7 @@
     mounted: function () {
       var self = this;
       window.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && self.menuOpen) { self.menuOpen = false; return; }
         if (!(e.ctrlKey || e.metaKey) || self.dlg) return;
         var k = e.key.toLowerCase();
         if (k === 's' || k === 'ы') { e.preventDefault(); e.shiftKey ? self.saveAs() : self.save(); }
@@ -204,6 +220,46 @@
     },
 
     methods: {
+      // Узкий экран: панели показываются по одной (см. @media в app.css)
+      narrow: function () { return window.matchMedia(NARROW).matches; },
+      pickDevice: function (d) {
+        this.deviceKey = d.key;
+        if (this.narrow()) this.view = 'device';
+      },
+      pickState: function (s) {
+        this.stateKey = s.key;
+        if (this.narrow()) this.view = 'editor';
+      },
+
+      // Перетаскивание разделителя: name — ключ в sizes, axis — 'x' или 'y'
+      startResize: function (e, name, axis) {
+        if (e.button) return;
+        e.preventDefault();
+        var self = this, el = e.currentTarget, lim = SIZE_LIMITS[name];
+        var start = axis === 'x' ? e.clientX : e.clientY, from = this.sizes[name];
+        el.setPointerCapture(e.pointerId);
+        el.classList.add('active');
+        function move(ev) {
+          var v = from + (axis === 'x' ? ev.clientX : ev.clientY) - start;
+          self.sizes[name] = Math.round(Math.max(lim[0], Math.min(lim[1], v)));
+        }
+        function up() {
+          el.removeEventListener('pointermove', move);
+          el.removeEventListener('pointerup', up);
+          el.removeEventListener('pointercancel', up);
+          el.classList.remove('active');
+          savePref('sizes', JSON.stringify(self.sizes));
+        }
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+      },
+      // Двойной щелчок по разделителю — размер по умолчанию
+      resetSize: function (name) {
+        this.sizes[name] = SIZE_DEFAULTS[name];
+        savePref('sizes', JSON.stringify(this.sizes));
+      },
+
       label: function (code) { return RIE.states.label(code); },
       // Драйвер по справочнику data/drivers.js: [обозначение, наименование] или null
       driver: function (d) { return RIE.drivers && RIE.drivers[d.driverUid.toLowerCase()] || null; },
@@ -328,6 +384,7 @@
         this.bom = f.bom;
         this.search = '';
         this.deviceKey = lib.devices.length ? lib.devices[0].key : null;
+        this.view = 'devices';
         var self = this;
         this.$nextTick(function () { self.dirty = false; });
         this.say('Открыт «' + f.name + '»: устройств ' + lib.devices.length);
@@ -466,6 +523,20 @@
       }
     }
   });
+
+  var NARROW = '(max-width: 760px)';   // то же значение — в @media в app.css
+  var SIZE_DEFAULTS = { devices: 270, device: 290, stage: 320 };
+  var SIZE_LIMITS = { devices: [160, 640], device: [200, 640], stage: [120, 900] };
+
+  function loadSizes() {
+    var r = {}, v;
+    try { v = JSON.parse(loadPref('sizes', '{}')) || {}; } catch (e) { v = {}; }
+    Object.keys(SIZE_DEFAULTS).forEach(function (k) {
+      var n = +v[k], lim = SIZE_LIMITS[k];
+      r[k] = n >= lim[0] && n <= lim[1] ? n : SIZE_DEFAULTS[k];
+    });
+    return r;
+  }
 
   function loadPref(k, def) {
     try { return localStorage.getItem('rie.' + k) || def; } catch (e) { return def; }

@@ -17,20 +17,27 @@
      @dragover.prevent="dragOver = true" @dragleave.self="dragOver = false" @drop.prevent="onDrop">
 
   <header class="toolbar">
-    <button @click="open" title="Ctrl+O">Открыть…</button>
-    <button @click="openDefault" title="Заводская библиотека «Рубеж» 2.8.7 (Default.rlib)">Заводская</button>
-    <button @click="save" :disabled="!lib" title="Ctrl+S">Сохранить</button>
-    <button @click="saveAs" :disabled="!lib" title="Ctrl+Shift+S">Сохранить как…</button>
+    <!-- Бургер — только на узком экране; на широком .tb-menu раскрыт в строку (display: contents) -->
+    <button class="burger" @click="menuOpen = !menuOpen" title="Меню" :aria-expanded="menuOpen">
+      <svg viewBox="0 0 16 16" width="16" height="16"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+    <div class="tb-menu" :class="{ open: menuOpen }" @click="$event.target.closest('button') && (menuOpen = false)">
+      <button @click="open" title="Ctrl+O">Открыть…</button>
+      <button @click="openDefault" title="Заводская библиотека «Рубеж» 2.8.7 (Default.rlib)">Заводская</button>
+      <button @click="save" :disabled="!lib" title="Ctrl+S">Сохранить</button>
+      <button @click="saveAs" :disabled="!lib" title="Ctrl+Shift+S">Сохранить как…</button>
+      <span class="spacer"></span>
+      <label class="bg-pick"><span>Тема</span>
+        <select v-model="theme">
+          <option value="auto">как в системе</option>
+          <option value="light">светлая</option>
+          <option value="dark">тёмная</option>
+        </select>
+      </label>
+    </div>
     <span class="file" v-if="lib">{{ fileName }}<span class="dirty" v-if="dirty" title="Есть несохранённые изменения"> ●</span></span>
-    <span class="spacer"></span>
-    <label class="bg-pick">Тема
-      <select v-model="theme">
-        <option value="auto">как в системе</option>
-        <option value="light">светлая</option>
-        <option value="dark">тёмная</option>
-      </select>
-    </label>
   </header>
+  <div class="tb-backdrop" v-if="menuOpen" @click="menuOpen = false"></div>
 
   <div class="welcome" v-if="!lib">
     <h1>Редактор библиотеки значков</h1>
@@ -40,7 +47,14 @@
       Для сохранения в исходный файл используйте Edge или Chrome.</p>
   </div>
 
-  <main class="layout" v-else>
+  <main class="layout" v-else :class="'view-' + shownView" :style="layoutStyle">
+    <!-- Переключатель панелей — только на узком экране -->
+    <nav class="m-nav">
+      <button :class="{ active: shownView === 'devices' }" @click="view = 'devices'">Устройства</button>
+      <button :class="{ active: shownView === 'device' }" @click="view = 'device'" :disabled="!device">Состояния</button>
+      <button :class="{ active: shownView === 'editor' }" @click="view = 'editor'" :disabled="!state">Редактор</button>
+    </nav>
+
     <!-- Устройства -->
     <section class="panel devices">
       <div class="panel-head">
@@ -48,7 +62,7 @@
         <span class="count">{{ devices.length }} / {{ lib.devices.length }}</span>
       </div>
       <ul class="list">
-        <li v-for="d in devices" :key="d.key" :class="{ sel: d.key === deviceKey }" @click="deviceKey = d.key">
+        <li v-for="d in devices" :key="d.key" :class="{ sel: d.key === deviceKey }" @click="pickDevice(d)">
           <state-art class="thumb" :device="d" :state="thumbState(d)" :playing="false"></state-art>
           <div class="li-text">
             <div class="li-title" :class="{ muted: !d.name && !driver(d) }" :title="deviceTitle(d)">{{ deviceTitle(d) }}</div>
@@ -57,6 +71,9 @@
         </li>
       </ul>
     </section>
+
+    <div class="splitter v" v-if="device" title="Перетащите, чтобы изменить ширину; двойной щелчок — по умолчанию"
+         @pointerdown="startResize($event, 'devices', 'x')" @dblclick="resetSize('devices')"></div>
 
     <!-- Устройство и состояния -->
     <section class="panel device" v-if="device">
@@ -73,7 +90,7 @@
       </div>
       <h3>Состояния</h3>
       <ul class="list states">
-        <li v-for="s in states" :key="s.key" :class="{ sel: s.key === stateKey }" @click="stateKey = s.key">
+        <li v-for="s in states" :key="s.key" :class="{ sel: s.key === stateKey }" @click="pickState(s)">
           <state-art class="thumb" :device="device" :state="s"></state-art>
           <div class="li-text">
             <div class="li-title">{{ label(s.stateClass) }}</div>
@@ -92,6 +109,9 @@
         <button class="danger" @click="deleteState">Удалить состояние</button>
       </div>
     </section>
+
+    <div class="splitter v" v-if="state" title="Перетащите, чтобы изменить ширину; двойной щелчок — по умолчанию"
+         @pointerdown="startResize($event, 'device', 'x')" @dblclick="resetSize('device')"></div>
 
     <!-- Редактор состояния -->
     <section class="panel editor" v-if="state">
@@ -120,6 +140,8 @@
             <figcaption>в масштабе плана</figcaption>
           </figure>
         </div>
+        <div class="splitter h" title="Перетащите, чтобы изменить размер превью; двойной щелчок — по умолчанию"
+             @pointerdown="startResize($event, 'stage', 'y')" @dblclick="resetSize('stage')"></div>
 
         <div class="frames">
           <div v-for="(f, i) in state.frames" :key="f.key" class="frame" :class="{ sel: i === frameIdx }" @click="frameIdx = i">
@@ -161,6 +183,8 @@
               <figcaption v-else>SVG</figcaption>
             </figure>
           </div>
+          <div class="splitter h" title="Перетащите, чтобы изменить размер превью; двойной щелчок — по умолчанию"
+               @pointerdown="startResize($event, 'stage', 'y')" @dblclick="resetSize('stage')"></div>
           <div class="code">
             <textarea v-model="state.svgImage" spellcheck="false" wrap="off"></textarea>
           </div>

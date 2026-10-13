@@ -124,8 +124,15 @@ input[readonly] { background: var(--bg); }
   padding: 6px 10px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+  position: relative;
 }
-.toolbar .file { margin-left: 10px; font-weight: 600; }
+/* На широком экране пункты меню — прямо в строке; имя файла — после кнопок, тема — справа */
+.tb-menu { display: contents; }
+.tb-menu .spacer, .tb-menu .bg-pick { order: 2; }
+.burger, .tb-backdrop { display: none; }
+.burger { padding: 6px 8px; line-height: 0; }
+.burger svg { display: block; }
+.toolbar .file { order: 1; margin-left: 10px; font-weight: 600; }
 .toolbar .dirty { color: var(--dirty); }
 .bg-pick { color: var(--muted); display: flex; gap: 6px; align-items: center; }
 
@@ -148,14 +155,30 @@ input[readonly] { background: var(--bg); }
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 270px 290px minmax(420px, 1fr);
+  /* ширины задаются разделителями (sizes в app.js) */
+  grid-template-columns: var(--w-devices, 270px) auto var(--w-device, 290px) auto minmax(320px, 1fr);
 }
 .panel {
   min-height: 0;
   overflow: auto;
   background: var(--panel);
-  border-right: 1px solid var(--line);
 }
+.m-nav { display: none; }
+
+/* Разделители: линия 1px, зона захвата шире за счёт ::before */
+.splitter {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  background: var(--line);
+  touch-action: none;
+}
+.splitter::before { content: ''; position: absolute; }
+.splitter.v { width: 1px; cursor: col-resize; }
+.splitter.v::before { top: 0; bottom: 0; left: -4px; right: -4px; }
+.splitter.h { height: 1px; cursor: row-resize; }
+.splitter.h::before { left: 0; right: 0; top: -4px; bottom: -4px; }
+.splitter:hover, .splitter.active { background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .panel-head {
   position: sticky;
   top: 0;
@@ -210,7 +233,7 @@ img.art { object-fit: contain; }
   box-shadow: inset 0 0 0 1px var(--line);
 }
 .thumb { width: 40px; height: 40px; padding: 3px; }
-.stage.big { width: 320px; height: 320px; padding: 10px; }
+.stage.big { width: var(--stage, 320px); max-width: calc(100vw - 24px); aspect-ratio: 1; padding: 10px; }
 .stage.medium { width: 120px; height: 120px; padding: 6px; }
 .stage.small { width: 32px; height: 32px; padding: 2px; }
 
@@ -225,7 +248,7 @@ img.art { object-fit: contain; }
 .check { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 
 /* ---------- Редактор ---------- */
-.editor { display: flex; flex-direction: column; border-right: 0; }
+.editor { display: flex; flex-direction: column; }
 .tabs {
   display: flex;
   gap: 4px;
@@ -237,7 +260,7 @@ img.art { object-fit: contain; }
 .tabs button.active { background: var(--panel); border-bottom-color: var(--panel); font-weight: 600; }
 .state-name { color: var(--muted); padding-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.previews { display: flex; gap: 16px; padding: 12px 10px; align-items: flex-start; }
+.previews { display: flex; flex-wrap: wrap; gap: 16px; padding: 12px 10px; align-items: flex-start; flex: none; }
 figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 
@@ -246,7 +269,6 @@ figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
   gap: 8px;
   padding: 8px 10px;
   overflow-x: auto;
-  border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   background: var(--strip);
   flex: none;
@@ -307,3 +329,67 @@ figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 .modal-btns button { min-width: 90px; padding: 5px 12px; }
 .modal-btns button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .modal-btns button.danger { background: var(--danger-soft); border-color: var(--danger); }
+
+/* ---------- Узкий экран (телефон): панели по одной, переключатель сверху ----------
+   Ширина 760px совпадает с NARROW в app.js */
+@media (max-width: 760px) {
+  body { font-size: 14px; }
+  input, select, textarea { font-size: 16px; }   /* иначе iOS увеличивает страницу при фокусе */
+  button { padding: 6px 12px; }
+
+  .toolbar { padding: 6px 8px; min-height: 44px; }
+  .toolbar .file { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .burger { display: block; }
+  .tb-menu { display: none; }
+  .tb-menu.open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    position: absolute;
+    top: 100%;
+    left: 6px;
+    z-index: 20;
+    min-width: 230px;
+    margin-top: 2px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    box-shadow: 0 8px 24px var(--backdrop);
+  }
+  .tb-menu.open button { text-align: left; padding: 8px 12px; }
+  .tb-menu.open .spacer { flex: none; height: 1px; margin: 2px 0; background: var(--line); }
+  .tb-menu.open .bg-pick { justify-content: space-between; }
+  .tb-backdrop { display: block; position: fixed; inset: 0; z-index: 19; }
+  .welcome { padding: 16px; text-align: center; }
+
+  .layout { display: flex; flex-direction: column; }
+  .m-nav {
+    display: flex;
+    gap: 4px;
+    padding: 6px 8px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .m-nav button { flex: 1; }
+  .m-nav button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .splitter.v { display: none; }
+  .layout > .panel { display: none; flex: 1; }
+  .layout.view-devices > .devices,
+  .layout.view-device > .device { display: block; }
+  .layout.view-editor > .editor { display: flex; }
+
+  .list li { padding: 7px 10px; }
+  .thumb { width: 44px; height: 44px; }
+  .fields label { grid-template-columns: 80px 1fr; }
+
+  .tabs { padding: 8px 8px 0; }
+  .state-name { display: none; }
+  .previews { justify-content: center; }
+  .frame { width: 140px; }
+  .frame-btns { gap: 4px; }
+  .frame-btns button { padding: 4px 8px; font-size: 14px; }
+  .frame-meta input { width: 72px; }
+  .code textarea { min-height: 260px; }
+}
