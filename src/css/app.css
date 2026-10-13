@@ -128,14 +128,16 @@ input[readonly] { background: var(--bg); }
 }
 /* На широком экране пункты меню — прямо в строке; имя файла — после кнопок, тема — справа */
 .tb-menu { display: contents; }
-.tb-menu .spacer, .tb-menu .bg-pick, .tb-menu .version { order: 2; }
+.tb-menu .spacer, .tb-menu .theme-btn, .tb-menu .reset, .tb-menu .version { order: 2; }
 .version { color: var(--muted); font-size: 12px; }
 .burger, .tb-backdrop { display: none; }
 .burger { padding: 6px 8px; line-height: 0; }
 .burger svg { display: block; }
 .toolbar .file { order: 1; margin-left: 10px; font-weight: 600; }
 .toolbar .dirty { color: var(--dirty); }
-.bg-pick { color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.theme-btn { padding: 5px 7px; line-height: 0; display: flex; align-items: center; gap: 8px; }
+.theme-btn svg { display: block; flex: none; }
+.tb-label { display: none; }
 
 .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); }
 .welcome h1 { color: var(--text); font-weight: 600; }
@@ -340,7 +342,8 @@ figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 
   .toolbar { padding: 6px 8px; min-height: 44px; }
   .toolbar .file { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .burger { display: block; }
+  .burger { display: block; padding: 10px 12px; }
+  .burger svg { width: 22px; height: 22px; }
   .tb-menu { display: none; }
   .tb-menu.open {
     display: flex;
@@ -351,7 +354,8 @@ figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
     top: 100%;
     left: 6px;
     z-index: 20;
-    min-width: 230px;
+    min-width: 270px;
+    max-width: calc(100vw - 12px);
     margin-top: 2px;
     padding: 8px;
     border: 1px solid var(--line);
@@ -359,10 +363,12 @@ figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
     background: var(--panel);
     box-shadow: 0 8px 24px var(--backdrop);
   }
-  .tb-menu.open button { text-align: left; padding: 8px 12px; }
+  .tb-menu.open button { text-align: left; min-height: 48px; padding: 10px 14px; font-size: 16px; }
   .tb-menu.open .spacer { flex: none; height: 1px; margin: 2px 0; background: var(--line); }
-  .tb-menu.open .bg-pick { justify-content: space-between; }
-  .tb-menu.open .version { padding: 0 12px; }
+  .tb-menu.open .theme-btn { line-height: inherit; gap: 10px; }
+  .tb-menu.open .theme-btn svg { width: 20px; height: 20px; }
+  .tb-menu.open .tb-label { display: inline; }
+  .tb-menu.open .version { padding: 2px 14px; }
   .tb-backdrop { display: block; position: fixed; inset: 0; z-index: 19; }
   .welcome { padding: 16px; text-align: center; }
 

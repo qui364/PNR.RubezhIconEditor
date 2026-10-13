@@ -114,6 +114,7 @@
     },
 
     computed: {
+      themeName: function () { return THEMES[this.theme] || THEMES.auto; },
       devices: function () {
         if (!this.lib) return [];
         var q = this.search.trim().toLowerCase();
@@ -224,10 +225,11 @@
         else if (k === 'o' || k === 'щ') { e.preventDefault(); self.open(); }
       });
       window.addEventListener('beforeunload', function (e) {
+        if (self._resetting) return;
         self.flushDraft();
         if (self.dirty) { e.preventDefault(); e.returnValue = ''; }
       });
-      window.addEventListener('pagehide', function () { self.flushDraft(); });
+      window.addEventListener('pagehide', function () { if (!self._resetting) self.flushDraft(); });
       this.restoreDraft();
     },
 
@@ -267,6 +269,10 @@
         el.addEventListener('pointercancel', up);
       },
       // Двойной щелчок по разделителю — размер по умолчанию
+      nextTheme: function () {
+        var k = Object.keys(THEMES);
+        this.theme = k[(k.indexOf(this.theme) + 1) % k.length];
+      },
       resetSize: function (name) {
         this.sizes[name] = SIZE_DEFAULTS[name];
         savePref('sizes', JSON.stringify(this.sizes));
@@ -441,6 +447,25 @@
         } catch (e) { /* ошибку сериализации покажет «Сохранить» */ }
       },
 
+      // Сброс локального хранилища: черновик в IndexedDB и настройки rie.* в localStorage
+      resetStorage: async function () {
+        if (!await this.ask({
+          title: 'Сброс локальных данных',
+          text: 'Удалить из браузера черновик открытого файла и настройки (тема, размеры панелей)? ' +
+            (this.dirty ? 'Несохранённые изменения в «' + this.fileName + '» будут потеряны. ' : '') +
+            'Файлы на диске не затрагиваются. Страница будет перезагружена.',
+          ok: 'Сбросить', danger: true
+        })) return;
+        this._resetting = true;
+        clearTimeout(this._draftTimer);
+        this._draftTimer = null;
+        try { await RIE.draft.clear(); } catch (e) { /* IndexedDB недоступна — черновика и нет */ }
+        try {
+          Object.keys(localStorage).forEach(function (k) { if (k.indexOf('rie.') === 0) localStorage.removeItem(k); });
+        } catch (e) { /* localStorage недоступен */ }
+        location.reload();
+      },
+
       save: async function () {
         if (!this.lib) return;
         if (!this.handle) return this.saveAs();
@@ -578,6 +603,9 @@
       }
     }
   });
+
+  // Тема UI: значение rie.theme → название; кнопка перебирает по кругу
+  var THEMES = { auto: 'как в системе', light: 'светлая', dark: 'тёмная' };
 
   var NARROW = '(max-width: 760px)';   // то же значение — в @media в app.css
   var SIZE_DEFAULTS = { devices: 270, device: 290, stage: 320 };
