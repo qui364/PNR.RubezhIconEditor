@@ -23,11 +23,15 @@
 <script src="../src/js/xml.js"></script>
 <script src="../src/js/rlib.js"></script>
 <script src="../src/js/xaml.js"></script>
+<script src="../src/js/code.js"></script>
+<script src="../src/js/changes.js"></script>
 <script src="../src/data/default-rlib.js"></script>
 <script src="harness.js"></script>
 <script src="test-xml.js"></script>
 <script src="test-rlib.js"></script>
 <script src="test-xaml.js"></script>
+<script src="test-code.js"></script>
+<script src="test-changes.js"></script>
 <script>
   // Headless-браузер ждёт отчёт благодаря --virtual-time-budget (см. run.ps1, tests.yml)
   T.loadExamples(new URLSearchParams(location.search).getAll('file')).then(T.runAll);

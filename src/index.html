@@ -65,13 +65,16 @@
       <div class="panel-head">
         <input type="search" v-model="search" placeholder="Поиск: название, обозначение, UID">
         <span class="count">{{ devices.length }} / {{ lib.devices.length }}</span>
+        <button class="chg-filter" v-if="changes.total || onlyChanged" :class="{ active: onlyChanged }"
+                @click="onlyChanged = !onlyChanged" :title="changesTitle">● {{ changes.total }}</button>
       </div>
       <ul class="list">
         <li v-for="d in devices" :key="d.key" :class="{ sel: d.key === deviceKey }" @click="pickDevice(d)">
           <state-art class="thumb" :device="d" :state="thumbState(d)" :playing="false"></state-art>
           <div class="li-text">
-            <div class="li-title" :class="{ muted: !d.name && !driver(d) }" :title="deviceTitle(d)">{{ deviceTitle(d) }}</div>
-            <div class="li-sub"><template v-if="deviceSub(d)"><span :class="{ mono: !driver(d) }">{{ deviceSub(d) }}</span> · </template>{{ d.states.length }} сост.</div>
+            <div class="li-title" :class="[chg(d), { muted: !d.name && !driver(d) }]" :title="deviceTitle(d)"><chg-mark :st="chg(d)"></chg-mark>{{ deviceTitle(d) }}</div>
+            <div class="li-sub li-name" v-if="deviceSub(d)" :class="{ mono: !driver(d) }" :title="deviceSub(d)">{{ deviceSub(d) }}</div>
+            <div class="li-sub">{{ d.states.length }} сост.</div>
           </div>
         </li>
       </ul>
@@ -98,7 +101,7 @@
         <li v-for="s in states" :key="s.key" :class="{ sel: s.key === stateKey }" @click="pickState(s)">
           <state-art class="thumb" :device="device" :state="s"></state-art>
           <div class="li-text">
-            <div class="li-title">{{ label(s.stateClass) }}</div>
+            <div class="li-title" :class="chg(s)"><chg-mark :st="chg(s)"></chg-mark>{{ label(s.stateClass) }}</div>
             <div class="li-sub"><span class="mono">{{ s.stateClass }}</span> · кадров {{ s.frames.length }}<span v-if="s.svgImage !== null" class="badge">SVG</span></div>
           </div>
         </li>
@@ -122,7 +125,7 @@
     <section class="panel editor" v-if="state">
       <div class="tabs">
         <button :class="{ active: tab === 'xaml' }" @click="tab = 'xaml'">Кадры (XAML) · {{ state.frames.length }}</button>
-        <button :class="{ active: tab === 'svg' }" @click="tab = 'svg'">SVG для веба<span v-if="state.svgImage === null" class="muted"> · нет</span></button>
+        <button :class="{ active: tab === 'svg' }" @click="tab = 'svg'"><chg-mark :st="svgMark(state)"></chg-mark>SVG для веба<span v-if="state.svgImage === null" class="muted"> · нет</span></button>
         <span class="spacer"></span>
         <span class="state-name">{{ deviceTitle(device) }} — {{ label(state.stateClass) }}</span>
       </div>
@@ -149,7 +152,8 @@
              @pointerdown="startResize($event, 'stage', 'y')" @dblclick="resetSize('stage')"></div>
 
         <div class="frames">
-          <div v-for="(f, i) in state.frames" :key="f.key" class="frame" :class="{ sel: i === frameIdx }" @click="frameIdx = i">
+          <div v-for="(f, i) in state.frames" :key="f.key" class="frame" :class="[chg(f), { sel: i === frameIdx }]" @click="frameIdx = i"
+               :title="{ changed: 'Кадр изменён после сохранения', new: 'Кадр добавлен после сохранения' }[chg(f)]">
             <xaml-view class="thumb" :src="f.image"></xaml-view>
             <div class="frame-meta">
               <span class="muted" title="Id кадра в файле">#{{ f.id }}</span>
@@ -166,7 +170,12 @@
         </div>
 
         <div class="code" v-if="frame">
-          <textarea v-model="frame.image" spellcheck="false" wrap="off"></textarea>
+          <div class="code-bar">
+            <button @click="formatCode" title="Отступы по вложенности (Ctrl+Z — отменить)">Форматировать</button>
+            <label class="check" title="При форматировании: у тегов с несколькими атрибутами — по атрибуту на строку"><input type="checkbox" v-model="columns"> атрибуты в столбик</label>
+            <label class="check"><input type="checkbox" v-model="wrap"> перенос строк</label>
+          </div>
+          <code-editor ref="code" v-model="frame.image" lang="xml" :wrap="wrap"></code-editor>
           <div class="diag error" v-if="frameRes.error">{{ frameRes.error }}</div>
           <div class="diag warn" v-for="w in frameRes.warnings">{{ w }}</div>
         </div>
@@ -191,7 +200,12 @@
           <div class="splitter h" title="Перетащите, чтобы изменить размер превью; двойной щелчок — по умолчанию"
                @pointerdown="startResize($event, 'stage', 'y')" @dblclick="resetSize('stage')"></div>
           <div class="code">
-            <textarea v-model="state.svgImage" spellcheck="false" wrap="off"></textarea>
+            <div class="code-bar">
+              <button @click="formatCode" title="Отступы по вложенности (Ctrl+Z — отменить)">Форматировать</button>
+              <label class="check" v-if="web && !web.overlay" title="При форматировании: у тегов с несколькими атрибутами — по атрибуту на строку"><input type="checkbox" v-model="columns"> атрибуты в столбик</label>
+              <label class="check"><input type="checkbox" v-model="wrap"> перенос строк</label>
+            </div>
+            <code-editor ref="code" v-model="state.svgImage" lang="auto" :wrap="wrap"></code-editor>
           </div>
           <div class="btn-row"><button class="danger" @click="deleteSvg">Удалить SVG</button></div>
         </template>
@@ -221,6 +235,8 @@
 <script src="js/xaml.js"></script>
 <script src="js/svgweb.js"></script>
 <script src="js/states.js"></script>
+<script src="js/changes.js"></script>
+<script src="js/code.js"></script>
 <script src="data/drivers.js"></script>
 <script src="js/fileio.js"></script>
 <script src="js/draft.js"></script>

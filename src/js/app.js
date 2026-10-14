@@ -80,10 +80,61 @@
       '<frame-player v-else :frames="state ? state.frames : []" :playing="playing"></frame-player>'
   };
 
+  // Редактор кода: прозрачный textarea поверх подсвеченного <pre> (js/code.js).
+  // Набор, выделение, Ctrl+Z — родные от textarea; слой подсветки повторяет его размер и прокрутку.
+  var CodeEditor = {
+    props: { modelValue: String, lang: { type: String, default: 'xml' }, wrap: Boolean },
+    emits: ['update:modelValue'],
+    computed: {
+      // Лишний перевод строки — чтобы слой прокручивался так же далеко, как textarea
+      html: function () { return RIE.code.highlight(this.modelValue || '', this.lang) + '\n '; }
+    },
+    mounted: function () {
+      var self = this;
+      this._ro = new ResizeObserver(function () { self.sync(); });
+      this._ro.observe(this.$refs.ta);
+    },
+    updated: function () { this.sync(); },
+    beforeUnmount: function () { this._ro.disconnect(); },
+    methods: {
+      sync: function () {
+        var ta = this.$refs.ta, hl = this.$refs.hl;
+        hl.style.width = ta.clientWidth + 'px';
+        hl.style.height = ta.clientHeight + 'px';
+        hl.scrollTop = ta.scrollTop;
+        hl.scrollLeft = ta.scrollLeft;
+      },
+      // Форматирует одной правкой textarea, чтобы Ctrl+Z её отменял. Возвращает, изменился ли текст.
+      // columns — атрибуты в столбик
+      format: function (columns) {
+        var ta = this.$refs.ta, src = this.modelValue || '';
+        var text = RIE.code.format(src, this.lang, columns);
+        if (text === src) return false;
+        ta.focus();
+        ta.select();
+        if (!document.execCommand('insertText', false, text)) this.$emit('update:modelValue', text);
+        ta.setSelectionRange(0, 0);
+        ta.scrollTop = ta.scrollLeft = 0;
+        return true;
+      }
+    },
+    template: '<div class="code-edit" :class="{ wrap: wrap }">' +
+      '<pre class="code-hl" ref="hl" aria-hidden="true" v-html="html"></pre>' +
+      '<textarea ref="ta" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" @scroll="sync"' +
+      ' spellcheck="false" :wrap="wrap ? \'soft\' : \'off\'"></textarea></div>'
+  };
+
+  // Пометка относительно последнего сохранения (js/changes.js): st — '' | 'changed' | 'new'
+  var ChgMark = {
+    props: { st: String },
+    template: '<span v-if="st" class="mark" :class="st" :title="st === \'new\' ? \'Добавлено после сохранения\' : \'Изменено после сохранения\'">' +
+      '{{ st === \'new\' ? \'+\' : \'●\' }}</span>'
+  };
+
   // ---------- Приложение ----------
 
   var app = Vue.createApp({
-    components: { XamlView: XamlView, FramePlayer: FramePlayer, SvgPreview: SvgPreview, StateArt: StateArt },
+    components: { XamlView: XamlView, FramePlayer: FramePlayer, SvgPreview: SvgPreview, StateArt: StateArt, CodeEditor: CodeEditor, ChgMark: ChgMark },
 
     data: function () {
       return {
@@ -93,6 +144,8 @@
         handle: null,
         bom: false,
         dirty: false,
+        baseVer: 0,           // растёт при смене базы пометок (_base — снимок последнего сохранения)
+        onlyChanged: false,   // список устройств: только изменённые
         search: '',
         deviceKey: null,
         stateKey: null,
@@ -100,6 +153,8 @@
         tab: 'xaml',
         theme: loadPref('theme', 'auto'),
         sizes: loadSizes(),   // ширины колонок и размер превью (разделители)
+        wrap: loadPref('wrap', '0') === '1',   // перенос строк в редакторе кода
+        columns: loadPref('columns', '0') === '1',   // «Форматировать»: атрибуты в столбик
         view: 'devices',      // видимая панель на узком экране: devices | device | editor
         menuOpen: false,      // бургер-меню панели инструментов (узкий экран)
         playing: true,
@@ -117,14 +172,32 @@
       themeName: function () { return THEMES[this.theme] || THEMES.auto; },
       devices: function () {
         if (!this.lib) return [];
-        var q = this.search.trim().toLowerCase();
-        if (!q) return this.lib.devices;
+        // Пробелы в запросе значимы: «ам » — «АМ» отдельным словом, не «АМП»/«Замок».
+        // Каждое поле проверяется отдельно, с пробелом по краям — граница слова в начале и конце.
+        var q = this.search.toLowerCase();
         var self = this;
-        return this.lib.devices.filter(function (d) {
+        var list = this.onlyChanged ? this.lib.devices.filter(function (d) { return self.chg(d); }) : this.lib.devices;
+        if (!q.trim()) return list;
+        return list.filter(function (d) {
           var drv = self.driver(d) || [];
-          return [d.name, drv[0], drv[1]].join('\n').toLowerCase().indexOf(q) >= 0 ||
-            d.uid.toLowerCase().indexOf(q) >= 0 || d.driverUid.toLowerCase().indexOf(q) >= 0;
+          return [d.name, drv[0], drv[1], d.uid, d.driverUid].some(function (f) {
+            return f && (' ' + f.toLowerCase() + ' ').indexOf(q) >= 0;
+          });
         });
+      },
+      // Итог пометок по устройствам: { changed, added, removed, total }
+      changes: function () {
+        this.baseVer;
+        var r = RIE.changes.summary(this._base, this.lib || { devices: [] });
+        r.total = r.changed + r.added + r.removed;
+        return r;
+      },
+      changesTitle: function () {
+        var c = this.changes, p = [];
+        if (c.changed) p.push('изменено ' + c.changed);
+        if (c.added) p.push('добавлено ' + c.added);
+        if (c.removed) p.push('удалено ' + c.removed);
+        return 'Устройства после сохранения: ' + p.join(', ') + '. Щелчок — показать только изменённые';
       },
       device: function () {
         var k = this.deviceKey;
@@ -200,6 +273,8 @@
           savePref('theme', v);
         }
       },
+      wrap: function (v) { savePref('wrap', v ? '1' : '0'); },
+      columns: function (v) { savePref('columns', v ? '1' : '0'); },
       deviceKey: function () {
         var s = this.states.find(function (x) { return x.stateClass === 'No'; }) || this.states[0];
         this.stateKey = s ? s.key : null;
@@ -281,14 +356,15 @@
       label: function (code) { return RIE.states.label(code); },
       // Драйвер по справочнику data/drivers.js: [обозначение, наименование] или null
       driver: function (d) { return RIE.drivers && RIE.drivers[d.driverUid.toLowerCase()] || null; },
-      // Как в администраторе: Name варианта, иначе наименование драйвера
+      // Как в администраторе: колонка «Обозначение» — Name варианта, иначе обозначение драйвера
       deviceTitle: function (d) {
         var drv = this.driver(d);
-        return d.name || drv && (drv[1] || drv[0]) || 'Неизвестный драйвер';
+        return d.name || drv && (drv[0] || drv[1]) || 'Неизвестный драйвер';
       },
+      // Колонка «Наименование» — наименование драйвера
       deviceSub: function (d) {
         var drv = this.driver(d);
-        return drv ? drv[0] : this.short(d.driverUid);
+        return drv ? drv[1] || drv[0] : this.short(d.driverUid);
       },
       // Миниатюра — XAML-рисунок (как в десктоп-клиенте): «Базовый рисунок», затем «Норма»,
       // затем любое состояние с кадрами. В заводской библиотеке у «No» обычно только SvgImage
@@ -301,6 +377,26 @@
           find(function (x) { return x.stateClass === 'No'; }) || d.states[0] || null;
       },
       short: function (guid) { return guid ? guid.slice(0, 8) : '—'; },
+
+      // ----- Пометки изменений (js/changes.js) -----
+      // '' | 'changed' | 'new' для устройства, состояния или кадра
+      chg: function (o) {
+        this.baseVer;
+        return RIE.changes.status(this._base, o);
+      },
+      // Вкладка «SVG для веба»: у нового состояния без SVG пометки нет
+      svgMark: function (s) {
+        this.baseVer;
+        var st = RIE.changes.field(this._base, s, 'svgImage');
+        return st === 'new' && s.svgImage === null ? '' : st;
+      },
+      // Новая база пометок: text — текст файла на диске; from — его модель, если это не this.lib
+      setBase: function (text, from) {
+        this._baseText = text;
+        this._base = RIE.changes.snapshot(this.lib, from);
+        this.baseVer++;
+        if (!this.changes.total) this.onlyChanged = false;
+      },
 
       say: function (msg, err) {
         this.status = msg;
@@ -401,6 +497,12 @@
         this.fileName = f.name;
         this.handle = f.handle || null;
         this.bom = f.bom;
+        // База пометок: файл на диске; у черновика с правками — сохранённый в нём исходный текст
+        var base = null;
+        if (fromDraft && f.dirty && f.base) {
+          try { base = R.parse(f.base); } catch (e) { base = null; }
+        }
+        this.setBase(base ? f.base : f.text, base);
         this.search = '';
         this.deviceKey = lib.devices.length ? lib.devices[0].key : null;
         this.view = 'devices';
@@ -439,10 +541,12 @@
         var self = this;
         clearTimeout(this._draftTimer);
         this._draftTimer = null;
+        if (dirty == null) dirty = this.dirty;
         try {
           RIE.draft.save({
             name: this.fileName, text: text != null ? text : R.serialize(this.lib),
-            bom: this.bom, handle: Vue.toRaw(this.handle), dirty: dirty != null ? dirty : this.dirty
+            bom: this.bom, handle: Vue.toRaw(this.handle), dirty: dirty,
+            base: dirty ? this._baseText : null   // для пометок изменений после восстановления
           }).catch(function (e) { self.say('Не удалось сохранить черновик: ' + e.message, true); });
         } catch (e) { /* ошибку сериализации покажет «Сохранить» */ }
       },
@@ -473,6 +577,7 @@
           var text = R.serialize(this.lib);
           await RIE.fileio.writeHandle(this.handle, text, this.bom);
           this.dirty = false;
+          this.setBase(text);
           this.writeDraft(text, false);
           this.say('Сохранено: ' + this.fileName);
         } catch (e) {
@@ -489,6 +594,7 @@
           this.handle = res.handle;
           this.fileName = res.name;
           this.dirty = false;
+          this.setBase(text);
           this.writeDraft(text, false);
           this.say(res.downloaded ? 'Файл скачан: ' + res.name + ' (браузер не поддерживает сохранение в исходный файл)' : 'Сохранено: ' + res.name);
         } catch (e) {
@@ -586,6 +692,15 @@
       setDuration: function (f, v) {
         var n = parseInt(v, 10);
         if (n > 0) f.duration = n;
+      },
+
+      // ----- Редактор кода -----
+      formatCode: function () {
+        try {
+          this.say(this.$refs.code.format(this.columns) ?'Текст отформатирован (Ctrl+Z — отменить)' : 'Текст уже отформатирован');
+        } catch (e) {
+          this.say('Не удалось отформатировать: ' + e.message, true);
+        }
       },
 
       // ----- SVG для веба -----
