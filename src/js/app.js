@@ -2,7 +2,7 @@
 (function (RIE) {
   'use strict';
 
-  RIE.version = '0.0.1';
+  RIE.version = '0.0.2';
 
   var R = RIE.rlib;
 
